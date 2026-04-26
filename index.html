@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero Prueba</title>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+font-family:Arial;
+margin:0;
+padding:20px;
+background:#f4f6f8;
+}
+
+h1{
+color:#1f2937;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:15px;
+margin-bottom:25px;
+}
+
+.card{
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 4px 10px rgba(0,0,0,.08);
+}
+
+.card h2{
+margin:0;
+font-size:14px;
+color:#666;
+}
+
+.card p{
+font-size:28px;
+margin:10px 0 0;
+font-weight:bold;
+}
+
+.chart-box{
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 4px 10px rgba(0,0,0,.08);
+margin-top:20px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Dashboard Operativo</h1>
+
+<div class="grid">
+<div class="card"><h2>Total Casos</h2><p id="total"></p></div>
+<div class="card"><h2>Comunas únicas</h2><p id="comunas"></p></div>
+<div class="card"><h2>Edad promedio</h2><p id="edad"></p></div>
+<div class="card"><h2>Prioridad Alta</h2><p id="alta"></p></div>
+</div>
+
+<div class="chart-box">
+<canvas id="grafico"></canvas>
+</div>
+
+<script>
+Papa.parse("datos.csv",{
+download:true,
+header:true,
+complete:function(results){
+
+let data = results.data.filter(x => x["Id Suceso"]);
+
+document.getElementById("total").innerText = data.length;
+
+let comunas = [...new Set(data.map(x=>x["Comuna"]).filter(Boolean))];
+document.getElementById("comunas").innerText = comunas.length;
+
+let edades = data.map(x=>parseFloat(x["Persona Edad"])).filter(x=>!isNaN(x));
+let prom = edades.reduce((a,b)=>a+b,0)/edades.length;
+document.getElementById("edad").innerText = prom.toFixed(1);
+
+let alta = data.filter(x=>x["Prioridad"]=="Alta").length;
+document.getElementById("alta").innerText = alta;
+
+let conteo = {};
+data.forEach(x=>{
+let c = x["Comuna"] || "Sin dato";
+conteo[c] = (conteo[c]||0)+1;
+});
+
+new Chart(document.getElementById("grafico"),{
+type:"bar",
+data:{
+labels:Object.keys(conteo),
+datasets:[{
+label:"Casos por comuna",
+data:Object.values(conteo)
+}]
+}
+});
+
+}
+});
+</script>
+
+</body>
+</html>
+```---
