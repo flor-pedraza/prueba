@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Tablero Operativo</title>
+<title>Tablero GCBA</title>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -12,17 +11,16 @@
 <style>
 body{
 margin:0;
-font-family:Arial, sans-serif;
-background:#f3f4f6;
-color:#1e3a5f;
+font-family:Arial,sans-serif;
+background:#f2f4f7;
+color:#0f3557;
 }
 
 header{
 background:linear-gradient(90deg,#ffd100 55%, #0f3557 55%);
 padding:25px;
-color:#0f3557;
+font-size:30px;
 font-weight:bold;
-font-size:28px;
 }
 
 header span{
@@ -31,9 +29,30 @@ font-size:14px;
 margin-top:8px;
 }
 
-.container{
-padding:20px;
+.container{padding:20px;}
+
+.tabs{
+display:flex;
+gap:10px;
+margin-bottom:20px;
 }
+
+.tab{
+padding:12px 20px;
+background:white;
+border-radius:10px;
+cursor:pointer;
+font-weight:bold;
+box-shadow:0 4px 10px rgba(0,0,0,.08);
+}
+
+.tab.active{
+background:#0f3557;
+color:white;
+}
+
+.section{display:none;}
+.section.active{display:block;}
 
 .grid{
 display:grid;
@@ -42,11 +61,12 @@ gap:15px;
 margin-bottom:20px;
 }
 
-.card{
+.card,.box{
 background:white;
 border-radius:14px;
 padding:18px;
 box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:20px;
 }
 
 .card h3{
@@ -59,22 +79,6 @@ color:#666;
 font-size:30px;
 margin:10px 0 0;
 font-weight:bold;
-color:#0f3557;
-}
-
-.box{
-background:white;
-padding:20px;
-border-radius:14px;
-box-shadow:0 4px 12px rgba(0,0,0,.08);
-margin-bottom:20px;
-}
-
-select,input{
-padding:10px;
-border-radius:8px;
-border:1px solid #ccc;
-margin-right:10px;
 }
 
 table{
@@ -98,6 +102,13 @@ border-bottom:1px solid #eee;
 tr:hover{
 background:#fff8d6;
 }
+
+select,input{
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+margin-right:10px;
+}
 </style>
 </head>
 
@@ -110,6 +121,14 @@ TABLERO OPERATIVO GCBA
 
 <div class="container">
 
+<div class="tabs">
+<div class="tab active" onclick="mostrar('ejecutivo',this)">Ejecutivo</div>
+<div class="tab" onclick="mostrar('operativo',this)">Operativo</div>
+</div>
+
+<!-- EJECUTIVO -->
+<div id="ejecutivo" class="section active">
+
 <div class="grid">
 <div class="card"><h3>Total Casos</h3><p id="total"></p></div>
 <div class="card"><h3>Comunas</h3><p id="comunas"></p></div>
@@ -118,36 +137,51 @@ TABLERO OPERATIVO GCBA
 </div>
 
 <div class="box">
+<canvas id="grafico1"></canvas>
+</div>
+
+</div>
+
+<!-- OPERATIVO -->
+<div id="operativo" class="section">
+
+<div class="box">
 <label>Filtrar comuna:</label>
 <select id="filtro"></select>
-</div>
 
-<div class="box">
-<canvas id="grafico"></canvas>
-</div>
-
-<div class="box">
 <input type="text" id="buscar" placeholder="Buscar...">
-<div style="overflow:auto; max-height:400px;">
+</div>
+
+<div class="box" style="overflow:auto; max-height:500px;">
 <table id="tabla"></table>
 </div>
+
 </div>
 
 </div>
 
 <script>
 let datosGlobal=[];
+let chart1;
 
 document.getElementById("fecha").innerText =
 "Actualizado: " + new Date().toLocaleString("es-AR");
+
+function mostrar(id,el){
+
+document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
+document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+
+document.getElementById(id).classList.add("active");
+el.classList.add("active");
+}
 
 Papa.parse("datos.csv",{
 download:true,
 header:true,
 complete:function(results){
 
-datosGlobal = results.data.filter(x=>x["Id Suceso"]);
-
+datosGlobal=results.data.filter(x=>x["Id Suceso"]);
 iniciar(datosGlobal);
 
 }
@@ -155,7 +189,7 @@ iniciar(datosGlobal);
 
 function iniciar(data){
 
-document.getElementById("total").innerText = data.length;
+document.getElementById("total").innerText=data.length;
 
 let comunas=[...new Set(data.map(x=>x["Comuna"]).filter(Boolean))];
 document.getElementById("comunas").innerText=comunas.length;
@@ -164,7 +198,7 @@ let edades=data.map(x=>parseFloat(x["Persona Edad"])).filter(x=>!isNaN(x));
 let prom=edades.reduce((a,b)=>a+b,0)/edades.length;
 document.getElementById("edad").innerText=prom.toFixed(1);
 
-document.getElementById("alta").innerText =
+document.getElementById("alta").innerText=
 data.filter(x=>x["Prioridad"]=="Alta").length;
 
 let select=document.getElementById("filtro");
@@ -174,35 +208,14 @@ comunas.forEach(c=>{
 select.innerHTML+=`<option value="${c}">${c}</option>`;
 });
 
-select.onchange=()=>filtrar();
-document.getElementById("buscar").onkeyup=()=>filtrar();
+select.onchange=filtrar;
+document.getElementById("buscar").onkeyup=filtrar;
 
-renderGrafico(data);
-renderTabla(data);
+grafico(data);
+tabla(data);
 }
 
-function filtrar(){
-
-let comuna=document.getElementById("filtro").value;
-let texto=document.getElementById("buscar").value.toLowerCase();
-
-let filtrado=datosGlobal.filter(x=>{
-
-let ok1=!comuna || x["Comuna"]==comuna;
-
-let fila=Object.values(x).join(" ").toLowerCase();
-let ok2=fila.includes(texto);
-
-return ok1 && ok2;
-});
-
-renderGrafico(filtrado);
-renderTabla(filtrado);
-}
-
-let chart;
-
-function renderGrafico(data){
+function grafico(data){
 
 let conteo={};
 
@@ -211,9 +224,9 @@ let c=x["Comuna"] || "Sin dato";
 conteo[c]=(conteo[c]||0)+1;
 });
 
-if(chart) chart.destroy();
+if(chart1) chart1.destroy();
 
-chart=new Chart(document.getElementById("grafico"),{
+chart1=new Chart(document.getElementById("grafico1"),{
 type:"bar",
 data:{
 labels:Object.keys(conteo),
@@ -226,15 +239,18 @@ backgroundColor:"#ffd100"
 });
 }
 
-function renderTabla(data){
+function tabla(data){
 
-let cols=["Id Suceso","Comuna","Prioridad","Estado","Tipo","resultado"];
+let cols=[
+"Id Suceso","Agencia","Comuna","Prioridad",
+"Estado","Tipo","resultado"
+];
 
 let html="<tr>";
 cols.forEach(c=>html+=`<th>${c}</th>`);
 html+="</tr>";
 
-data.slice(0,100).forEach(f=>{
+data.slice(0,150).forEach(f=>{
 html+="<tr>";
 cols.forEach(c=>{
 html+=`<td>${f[c]||""}</td>`;
@@ -244,31 +260,29 @@ html+="</tr>";
 
 document.getElementById("tabla").innerHTML=html;
 }
+
+function filtrar(){
+
+let comuna=document.getElementById("filtro").value;
+let texto=document.getElementById("buscar").value.toLowerCase();
+
+let filtrado=datosGlobal.filter(x=>{
+
+let ok1=!comuna || x["Comuna"]==comuna;
+let fila=Object.values(x).join(" ").toLowerCase();
+let ok2=fila.includes(texto);
+
+return ok1 && ok2;
+
+});
+
+tabla(filtrado);
+}
 </script>
 
 </body>
 </html>
-```---
-
-# Después
-
-## Commit changes
-
-Esperá 30 segundos y recargá:
-
-
 
 ---
 
-# Te aviso algo importante
-
-Esto ya empieza a parecer producto serio.
-
----
-
-# Cuando lo veas, decime:
-
-## A. Quiero gráficos mejores  
-## B. Quiero mapa CABA  
-## C. Quiero métricas de gestión reales  
-## D. Quiero conectarlo a API Kobo
+# Decime cuando suba. Esto ya se está poniendo serio.
