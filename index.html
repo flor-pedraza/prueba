@@ -3,115 +3,272 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tablero Prueba</title>
+
+<title>Tablero Operativo</title>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 body{
-font-family:Arial;
 margin:0;
-padding:20px;
-background:#f4f6f8;
+font-family:Arial, sans-serif;
+background:#f3f4f6;
+color:#1e3a5f;
 }
 
-h1{
-color:#1f2937;
+header{
+background:linear-gradient(90deg,#ffd100 55%, #0f3557 55%);
+padding:25px;
+color:#0f3557;
+font-weight:bold;
+font-size:28px;
+}
+
+header span{
+display:block;
+font-size:14px;
+margin-top:8px;
+}
+
+.container{
+padding:20px;
 }
 
 .grid{
 display:grid;
-grid-template-columns:repeat(4,1fr);
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
 gap:15px;
-margin-bottom:25px;
+margin-bottom:20px;
 }
 
 .card{
 background:white;
-padding:20px;
-border-radius:12px;
-box-shadow:0 4px 10px rgba(0,0,0,.08);
+border-radius:14px;
+padding:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
 }
 
-.card h2{
+.card h3{
 margin:0;
 font-size:14px;
 color:#666;
 }
 
 .card p{
-font-size:28px;
+font-size:30px;
 margin:10px 0 0;
 font-weight:bold;
+color:#0f3557;
 }
 
-.chart-box{
+.box{
 background:white;
 padding:20px;
-border-radius:12px;
-box-shadow:0 4px 10px rgba(0,0,0,.08);
-margin-top:20px;
+border-radius:14px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:20px;
+}
+
+select,input{
+padding:10px;
+border-radius:8px;
+border:1px solid #ccc;
+margin-right:10px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+font-size:14px;
+}
+
+th{
+background:#0f3557;
+color:white;
+padding:10px;
+text-align:left;
+}
+
+td{
+padding:8px;
+border-bottom:1px solid #eee;
+}
+
+tr:hover{
+background:#fff8d6;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Dashboard Operativo</h1>
+<header>
+TABLERO OPERATIVO GCBA
+<span id="fecha"></span>
+</header>
+
+<div class="container">
 
 <div class="grid">
-<div class="card"><h2>Total Casos</h2><p id="total"></p></div>
-<div class="card"><h2>Comunas únicas</h2><p id="comunas"></p></div>
-<div class="card"><h2>Edad promedio</h2><p id="edad"></p></div>
-<div class="card"><h2>Prioridad Alta</h2><p id="alta"></p></div>
+<div class="card"><h3>Total Casos</h3><p id="total"></p></div>
+<div class="card"><h3>Comunas</h3><p id="comunas"></p></div>
+<div class="card"><h3>Edad Promedio</h3><p id="edad"></p></div>
+<div class="card"><h3>Prioridad Alta</h3><p id="alta"></p></div>
 </div>
 
-<div class="chart-box">
+<div class="box">
+<label>Filtrar comuna:</label>
+<select id="filtro"></select>
+</div>
+
+<div class="box">
 <canvas id="grafico"></canvas>
 </div>
 
+<div class="box">
+<input type="text" id="buscar" placeholder="Buscar...">
+<div style="overflow:auto; max-height:400px;">
+<table id="tabla"></table>
+</div>
+</div>
+
+</div>
+
 <script>
+let datosGlobal=[];
+
+document.getElementById("fecha").innerText =
+"Actualizado: " + new Date().toLocaleString("es-AR");
+
 Papa.parse("datos.csv",{
 download:true,
 header:true,
 complete:function(results){
 
-let data = results.data.filter(x => x["Id Suceso"]);
+datosGlobal = results.data.filter(x=>x["Id Suceso"]);
+
+iniciar(datosGlobal);
+
+}
+});
+
+function iniciar(data){
 
 document.getElementById("total").innerText = data.length;
 
-let comunas = [...new Set(data.map(x=>x["Comuna"]).filter(Boolean))];
-document.getElementById("comunas").innerText = comunas.length;
+let comunas=[...new Set(data.map(x=>x["Comuna"]).filter(Boolean))];
+document.getElementById("comunas").innerText=comunas.length;
 
-let edades = data.map(x=>parseFloat(x["Persona Edad"])).filter(x=>!isNaN(x));
-let prom = edades.reduce((a,b)=>a+b,0)/edades.length;
-document.getElementById("edad").innerText = prom.toFixed(1);
+let edades=data.map(x=>parseFloat(x["Persona Edad"])).filter(x=>!isNaN(x));
+let prom=edades.reduce((a,b)=>a+b,0)/edades.length;
+document.getElementById("edad").innerText=prom.toFixed(1);
 
-let alta = data.filter(x=>x["Prioridad"]=="Alta").length;
-document.getElementById("alta").innerText = alta;
+document.getElementById("alta").innerText =
+data.filter(x=>x["Prioridad"]=="Alta").length;
 
-let conteo = {};
-data.forEach(x=>{
-let c = x["Comuna"] || "Sin dato";
-conteo[c] = (conteo[c]||0)+1;
+let select=document.getElementById("filtro");
+select.innerHTML="<option value=''>Todas</option>";
+
+comunas.forEach(c=>{
+select.innerHTML+=`<option value="${c}">${c}</option>`;
 });
 
-new Chart(document.getElementById("grafico"),{
+select.onchange=()=>filtrar();
+document.getElementById("buscar").onkeyup=()=>filtrar();
+
+renderGrafico(data);
+renderTabla(data);
+}
+
+function filtrar(){
+
+let comuna=document.getElementById("filtro").value;
+let texto=document.getElementById("buscar").value.toLowerCase();
+
+let filtrado=datosGlobal.filter(x=>{
+
+let ok1=!comuna || x["Comuna"]==comuna;
+
+let fila=Object.values(x).join(" ").toLowerCase();
+let ok2=fila.includes(texto);
+
+return ok1 && ok2;
+});
+
+renderGrafico(filtrado);
+renderTabla(filtrado);
+}
+
+let chart;
+
+function renderGrafico(data){
+
+let conteo={};
+
+data.forEach(x=>{
+let c=x["Comuna"] || "Sin dato";
+conteo[c]=(conteo[c]||0)+1;
+});
+
+if(chart) chart.destroy();
+
+chart=new Chart(document.getElementById("grafico"),{
 type:"bar",
 data:{
 labels:Object.keys(conteo),
 datasets:[{
 label:"Casos por comuna",
-data:Object.values(conteo)
+data:Object.values(conteo),
+backgroundColor:"#ffd100"
 }]
 }
 });
-
 }
+
+function renderTabla(data){
+
+let cols=["Id Suceso","Comuna","Prioridad","Estado","Tipo","resultado"];
+
+let html="<tr>";
+cols.forEach(c=>html+=`<th>${c}</th>`);
+html+="</tr>";
+
+data.slice(0,100).forEach(f=>{
+html+="<tr>";
+cols.forEach(c=>{
+html+=`<td>${f[c]||""}</td>`;
 });
+html+="</tr>";
+});
+
+document.getElementById("tabla").innerHTML=html;
+}
 </script>
 
 </body>
 </html>
 ```---
+
+# Después
+
+## Commit changes
+
+Esperá 30 segundos y recargá:
+
+
+
+---
+
+# Te aviso algo importante
+
+Esto ya empieza a parecer producto serio.
+
+---
+
+# Cuando lo veas, decime:
+
+## A. Quiero gráficos mejores  
+## B. Quiero mapa CABA  
+## C. Quiero métricas de gestión reales  
+## D. Quiero conectarlo a API Kobo
